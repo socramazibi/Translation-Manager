@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de traducciones Clave=Valor</title>
+    <script type="text/javascript" nonce="your_nonce_here" src="//local.adguard.org?ts=..."></script>
+    <script type="text/javascript" nonce="your_nonce_here" src="//local.adguard.org?ts=..."></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
+    <style>
+      .hidden-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+
+      .hidden-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      .translation-row:hover {
+        background-color: rgba(59, 130, 246, 0.1);
+      }
+
+      .key-highlight {
+        color: #0b5ed7;
+        font-weight: bold;
+      }
+
+      .value-highlight {
+        color: #146c43;
+      }
+
+      .duplicate-key-exact {
+        background-color: rgba(220, 53, 69, 0.2);
+        border-left: 3px solid #dc3545;
+      }
+
+      .duplicate-value-exact {
+        background-color: rgba(220, 53, 69, 0.15);
+        border-left: 3px solid #b02a37;
+      }
+
+      /* Slightly different red for value */
+      .duplicate-value-close {
+        background-color: rgba(255, 193, 7, 0.2);
+        border-left: 3px solid #ffc107;
+      }
+
+      .nav-tab {
+        position: relative;
+      }
+
+      .nav-tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #3b82f6;
+      }
+
+      .tooltip {
+        position: relative;
+      }
+
+      .tooltip .tooltip-text {
+        visibility: hidden;
+        width: 120px;
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -60px;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      .tooltip:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+      }
+
+      .selection-highlight {
+        background-color: rgba(25, 135, 84, 0.15);
+        border-left: 3px solid #198754;
+      }
+
+      .no-selection-highlight {
+        background-color: rgba(108, 117, 125, 0.1);
+        border-left: 3px solid #6c757d;
+      }
+
+      /* Styles for Diff Highlighting */
+      .diff-added {
+        background-color: rgba(40, 167, 69, 0.2);
+        /* Vert clair */
+        /* text-decoration: none; */
+        /* font-weight: bold; */
+        border-radius: 2px;
+        padding: 0 1px;
+      }
+
+      .diff-removed {
+        /* On ne l'utilisera pas pour l'affichage de la 2eme chaine */
+        background-color: rgba(220, 53, 69, 0.2);
+        /* Rouge clair */
+        text-decoration: line-through;
+        border-radius: 2px;
+        padding: 0 1px;
+      }
+
+      /* Style optionnel pour les parties inchangées (peut aider à contraster) */
+      .diff-unchanged {
+        /* color: #6c757d; */
+        /* Option: griser légèrement */
+      }
+
+      .duplicate-key-exact {
+        background-color: rgba(220, 53, 69, 0.2);
+        border-left: 3px solid #dc3545;
+      }
+
+      .duplicate-value-exact {
+        background-color: rgba(220, 53, 69, 0.15);
+        border-left: 3px solid #b02a37;
+      }
+
+      .duplicate-value-close {
+        background-color: rgba(255, 193, 7, 0.2);
+        border-left: 3px solid #ffc107;
+      }
+
+      /* Ensure word wrap */
+      .table-wrap-cell {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        /* Older browsers */
+        overflow-wrap: break-word !important;
+        /* Standard */
+        max-width: 300px;
+        /* Adjust as needed */
+      }
+
+      .table-key-cell {
+        max-width: 250px;
+      }
+
+      /* Specific max-width for keys */
+      .table-value-cell {
+        max-width: 350px;
+      }
+
+      /* Specific max-width for values */
+      /* Style for disabled range slider */
+      input[type=range]:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      input[type=range]:disabled::-webkit-slider-thumb {
+        background: #9ca3af;
+        /* Gray thumb */
+        cursor: not-allowed;
+      }
+
+      input[type=range]:disabled::-moz-range-thumb {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-800">
+    <div class="container mx-auto p-4 max-w-7xl">
+      <h1 class="text-3xl font-bold text-center text-blue-600 mb-6">Gestor de traducciones Clave=Valor</h1>
+      <!-- Navigation tabs -->
+      <div class="flex border-b border-gray-200 mb-4">
+        <button id="importTab" class="nav-tab active px-4 py-2 font-medium text-blue-600">
+          <i class="fas fa-file-import mr-2"></i>Importación </button>
+        <button id="editTab" class="nav-tab px-4 py-2 font-medium text-gray-500" disabled>
+          <i class="fas fa-edit mr-2"></i>Edición </button>
+        <button id="compareTab" class="nav-tab px-4 py-2 font-medium text-gray-500" disabled>
+          <i class="fas fa-columns mr-2"></i>Comparación </button>
+        <button id="duplicatesTab" class="nav-tab px-4 py-2 font-medium text-gray-500" disabled>
+          <i class="fas fa-clone mr-2"></i>Duplicados </button>
+        <button id="exportTab" class="nav-tab px-4 py-2 font-medium text-gray-500" disabled>
+          <i class="fas fa-file-export mr-2"></i>Exportar </button>
+      </div>
+      <!-- Tab content sections -->
+      <div id="importSection" class="tab-content">
+        <!-- Import Section Content (no changes) -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-xl font-semibold mb-4">Importación de archivos de traducción</h2>
+          <p class="mb-4">Importación de archivos de traducción</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- File 1 upload -->
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <h3 class="text-lg font-medium mb-2">Fichero 1</h3>
+              <div class="flex flex-col space-y-2">
+                <label class="flex flex-col items-center px-4 py-6 bg-blue-50 text-blue-500 rounded-lg cursor-pointer hover:bg-blue-100">
+                  <i class="fas fa-cloud-upload-alt text-3xl mb-2"></i>
+                  <span class="text-sm">Haga clic para seleccionar un archivo</span>
+                  <input type="file" id="file1" class="hidden" accept=".txt, .properties">
+                </label>
+                <div id="file1Info" class="text-sm text-gray-600 mt-2 hidden">
+                  <p id="file1Name">Ningún fichero seleccionado</p>
+                  <p id="file1Stats"></p>
+                </div>
+              </div>
+            </div>
+            <!-- File 2 upload -->
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <h3 class="text-lg font-medium mb-2">Fichero 2 (opcional)</h3>
+              <div class="flex flex-col space-y-2">
+                <label class="flex flex-col items-center px-4 py-6 bg-blue-50 text-blue-500 rounded-lg cursor-pointer hover:bg-blue-100">
+                  <i class="fas fa-cloud-upload-alt text-3xl mb-2"></i>
+                  <span class="text-sm">Haga clic para seleccionar un archivo</span>
+                  <input type="file" id="file2" class="hidden" accept=".txt, .properties">
+                </label>
+                <div id="file2Info" class="text-sm text-gray-600 mt-2 hidden">
+                  <p id="file2Name">Ningún fichero seleccionado</p>
+                  <p id="file2Stats"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-6">
+            <h3 class="text-lg font-medium mb-2">Opciones de importación</h3>
+            <div class="bg-gray-50 p-4 rounded-lg">
+              <div class="flex flex-col space-y-2">
+                <label class="flex items-center">
+                  <input type="checkbox" id="ignoreEscaped" class="form-checkbox h-4 w-4 text-blue-600" checked>
+                  <span class="ml-2">Ignore los signos "=" Se ha escapado con "\"</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" id="ignoreHtmlEquals" class="form-checkbox h-4 w-4 text-blue-600" checked>
+                  <span class="ml-2">Ignorar las señales "=" en etiquetas HTML</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" id="trimWhitespace" class="form-checkbox h-4 w-4 text-blue-600" checked>
+                  <span class="ml-2">Eliminar los espacios al principio y al final de una clave/valor</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="mt-6 flex justify-center">
+            <button id="parseFilesBtn" class="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <i class="fas fa-cogs mr-2"></i>Análisis de expedientes </button>
+          </div>
+        </div>
+      </div>
+      <div id="editSection" class="tab-content hidden">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-xl font-semibold mb-4">Edición de traducciones</h2>
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <label for="editFileSelect" class="mr-2">Archivo :</label>
+              <select id="editFileSelect" class="border border-gray-300 rounded px-2 py-1">
+                <option value="file1">Archivo 1</option>
+                <option value="file2">Archivo 2</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" id="searchEdit" placeholder="Buscar (clave o valor)..." class="border border-gray-300 rounded px-3 py-1 w-64">
+            </div>
+          </div>
+          <div class="overflow-x-auto max-h-[60vh]">
+            <table class="min-w-full border border-gray-200 table-fixed">
+              <!-- tabla - fija ayuda con el ancho de columna -->
+              <colgroup>
+                <col style="width: 10%;">
+                <col style="width: 35%;">
+                <col style="width: 40%;">
+                <col style="width: 15%;">
+              </colgroup>
+              <thead class="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th class="px-4 py-2 border-b text-left">N° Origen</th>
+                  <th class="px-4 py-2 border-b text-left">Clave</th>
+                  <th class="px-4 py-2 border-b text-left">Valor</th>
+                  <th class="px-4 py-2 border-b text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="editTableBody">
+                <tr>
+                  <td colspan="4" class="px-4 py-6 text-center text-gray-500">Primero importa un archivo para empezar a editarlo</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="compareSection" class="tab-content hidden">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-xl font-semibold mb-4">Comparación de archivos</h2>
+          <div style="display: none;" class="mb-2">
+            <label for="compareFilter" class="mr-2 text-sm font-medium">Filtro :</label>
+            <select id="compareFilter" class="border border-gray-300 rounded px-2 py-1 text-sm w-full md:w-auto">
+              <option value="all" selected>Ver todos</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <p class="text-gray-600 mb-2">Comparación lado a lado de los dos archivos. Selecciona las mejores traducciones para fusionarlas.</p>
+            <div class="flex justify-between items-center">
+              <div>
+                <input type="text" id="searchCompare" placeholder="Búsqueda por clave..." class="border border-gray-300 rounded px-3 py-1 w-64">
+              </div>
+              <div class="space-x-2">
+                <button id="selectAllFile1" class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm">
+                  <i class="fas fa-check-circle mr-1"></i>Todos los F1 </button>
+                <button id="selectAllFile2" class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm">
+                  <i class="fas fa-check-circle mr-1"></i>Todos los F2 </button>
+                <button id="selectNoneAll" class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-sm">
+                  <i class="fas fa-ban mr-1"></i>Todos o Ninguno </button>
+              </div>
+            </div>
+          </div>
+          <div class="overflow-x-auto max-h-[60vh]">
+            <table class="min-w-full border border-gray-200 table-fixed">
+              <!-- tabla - fija ayuda con el ancho de columna -->
+              <colgroup>
+                <col style="width: 30%;">
+                <col style="width: 30%;">
+                <col style="width: 30%;">
+                <col style="width: 10%;">
+              </colgroup>
+              <thead class="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th class="px-4 py-2 border-b text-left">Clave</th>
+                  <th class="px-4 py-2 border-b text-left">Archivo 1</th>
+                  <th class="px-4 py-2 border-b text-left">Archivo 2</th>
+                  <th class="px-4 py-2 border-b text-center">Selección</th>
+                </tr>
+              </thead>
+              <tbody id="compareTableBody">
+                <tr>
+                  <td colspan="4" class="px-4 py-6 text-center text-gray-500">Importar dos archivos para compararlos</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="duplicatesSection" class="tab-content hidden">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-xl font-semibold mb-4">Detección de duplicados</h2>
+          <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+            <!-- File Selection -->
+            <div>
+              <label for="duplicatesFileSelect" class="block text-sm font-medium text-gray-700 mb-1">Archivo :</label>
+              <select id="duplicatesFileSelect" class="border border-gray-300 rounded px-2 py-1 w-full text-sm">
+                <option value="file1">Archivo 1</option>
+                <option value="file2">Archivo 2</option>
+                <option value="merged">Archivo fusionado</option>
+              </select>
+            </div>
+            <!-- Compare Type Selection -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Claves (exactas)</label>
+              <div class="flex space-x-4">
+                <label class="inline-flex items-center">
+                  <input type="radio" id="compareKeysRadio" name="duplicateType" value="key" class="form-radio h-4 w-4 text-blue-600" checked>
+                  <span class="ml-2 text-sm">Claves (exactas)</span>
+                </label>
+                <label class="inline-flex items-center">
+                  <input type="radio" id="compareValuesRadio" name="duplicateType" value="value" class="form-radio h-4 w-4 text-blue-600">
+                  <span class="ml-2 text-sm">Valores (similares)</span>
+                </label>
+              </div>
+            </div>
+            <!-- Similarity Slider -->
+            <div>
+              <label for="similaritySlider" class="block text-sm font-medium text-gray-700 mb-1">Umbral de similitud (Valores) :</label>
+              <div class="flex items-center space-x-2">
+                <input type="range" id="similaritySlider" min="80" max="100" value="80" disabled class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="similarityValue" class="font-semibold text-sm w-10 text-right">80%</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 text-sm">
+            <div class="flex items-center mb-1">
+              <span class="inline-block w-3 h-3 mr-2 duplicate-key-exact"></span>
+              <span>Duplicado exacto de llaves</span>
+            </div>
+            <div class="flex items-center mb-1">
+              <span class="inline-block w-3 h-3 mr-2 duplicate-value-exact"></span>
+              <span>Duplicación exacta de los valores (100%)</span>
+            </div>
+            <div class="flex items-center">
+              <span class="inline-block w-3 h-3 mr-2 duplicate-value-close"></span>
+              <span>Duplicación parcial de valores (en función del umbral)</span>
+            </div>
+          </div>
+          <div class="overflow-x-auto mt-4 max-h-[60vh]">
+            <table class="min-w-full border border-gray-200 table-fixed">
+              <!-- table-fixed helps -->
+              <colgroup>
+                <col style="width: 8%;">
+                <col style="width: 25%;">
+                <col style="width: 30%;">
+                <col style="width: 12%;">
+                <col style="width: 25%;">
+              </colgroup>
+              <thead class="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th class="px-4 py-2 border-b text-left">N°</th>
+                  <th class="px-4 py-2 border-b text-left">Clave</th>
+                  <th class="px-4 py-2 border-b text-left">Valor</th>
+                  <th class="px-4 py-2 border-b text-center">Similitud</th>
+                  <th class="px-4 py-2 border-b text-left">Doble con (Línea / Llave)</th>
+                </tr>
+              </thead>
+              <tbody id="duplicatesTableBody">
+                <tr>
+                  <td colspan="5" class="px-4 py-6 text-center text-gray-500">Importe un archivo y elija el tipo de comparación.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="exportSection" class="tab-content hidden">
+        <!-- Exportar contenido de sección (sin cambios) -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-xl font-semibold mb-4">Exportar el archivo de traducción</h2>
+          <div class="mb-6">
+            <h3 class="text-lg font-medium mb-2">Opciones de exportación</h3>
+            <div class="bg-gray-50 p-4 rounded-lg">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="exportFormat" class="block mb-1">Formato :</label>
+                  <select id="exportFormat" class="border border-gray-300 rounded px-2 py-1 w-full">
+                    <option value="keyvalue">Key=Value</option>
+                    <option value="json">JSON</option>
+                    <option value="xml">XML</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="exportEncoding" class="block mb-1">Fuente :</label>
+                  <select id="exportEncoding" class="border border-gray-300 rounded px-2 py-1 w-full">
+                    <option value="utf8">UTF-8</option>
+                    <option value="latin1">Latin-1 (ISO-8859-1)</option>
+                    <option value="ascii">ASCII</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="exportSource" class="block mb-1">Fuente :</label>
+                  <select id="exportSource" class="border border-gray-300 rounded px-2 py-1 w-full">
+                    <option value="merged">Fichero fusionado</option>
+                    <option value="file1">Archivo 1</option>
+                    <option value="file2">Archivo 2</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="exportFilename" class="block mb-1">Nombre del fichero :</label>
+                  <input type="text" id="exportFilename" class="border border-gray-300 rounded px-2 py-1 w-full" value="translations_export.txt">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-6">
+            <h3 class="text-lg font-medium mb-2">Visión general</h3>
+            <div class="bg-gray-800 text-white p-4 rounded-lg overflow-auto h-64 font-mono text-sm">
+              <pre id="exportPreview">Importe y procese primero los archivos para generar una vista previa de la exportación.</pre>
+            </div>
+          </div>
+          <div class="flex justify-center">
+            <button id="downloadBtn" class="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <i class="fas fa-download mr-2"></i>Descargar archivo </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal for editing -->
+    <div id="editModal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+      <div class="absolute inset-0 bg-black opacity-50" onclick="closeEditModal()"></div>
+      <div class="bg-white rounded-lg shadow-xl z-10 w-full max-w-2xl">
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+          <h3 class="text-lg font-medium">Modificar la traducción</h3>
+          <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times fa-lg"></i>
+          </button>
+        </div>
+        <div class="p-4">
+          <input type="hidden" id="editOriginalIndex">
+          <input type="hidden" id="editFile">
+          <div class="mb-4">
+            <label for="editKeyInput" class="block mb-1 font-medium">Clave :</label>
+            <textarea id="editKeyInput" rows="2" class="border border-gray-300 rounded px-3 py-2 w-full font-mono text-sm"></textarea>
+          </div>
+          <div class="mb-4">
+            <label for="editValueInput" class="block mb-1 font-medium">Valor :</label>
+            <textarea id="editValueInput" rows="4" class="border border-gray-300 rounded px-3 py-2 w-full font-mono text-sm"></textarea>
+          </div>
+          <div id="editWarning" class="text-yellow-600 mb-4 hidden">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <span id="editWarningText"></span>
+          </div>
+        </div>
+        <div class="p-4 border-t border-gray-200 flex justify-end space-x-3">
+          <button id="cancelEditBtn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" onclick="closeEditModal()"> Cancelar </button>
+          <button id="saveEditBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"> Guardar </button>
+        </div>
+      </div>
+    </div>
+    <script>
+const state = {
+    file1: {
+        name: '',
+        content: '',
+        parsed: [],
+        selected: new Set()
+    },
+    file2: {
+        name: '',
+        content: '',
+        parsed: [],
+        selected: new Set()
+    },
+    merged: {
+        parsed: []
+    },
+    options: {
+        ignoreEscaped: true,
+        ignoreHtmlEquals: true,
+        trimWhitespace: true,
+        similarityThreshold: 80,
+        duplicateComparisonType: 'key',
+        debounceTimeout: null
+    },
+    currentEditItem: null,
+};
+const elements = {
+    importTab: document.getElementById('importTab'),
+    editTab: document.getElementById('editTab'),
+    compareTab: document.getElementById('compareTab'),
+    duplicatesTab: document.getElementById('duplicatesTab'),
+    exportTab: document.getElementById('exportTab'),
+    importSection: document.getElementById('importSection'),
+    editSection: document.getElementById('editSection'),
+    compareSection: document.getElementById('compareSection'),
+    duplicatesSection: document.getElementById('duplicatesSection'),
+    exportSection: document.getElementById('exportSection'),
+    file1Input: document.getElementById('file1'),
+    file2Input: document.getElementById('file2'),
+    file1Info: document.getElementById('file1Info'),
+    file2Info: document.getElementById('file2Info'),
+    file1Name: document.getElementById('file1Name'),
+    file2Name: document.getElementById('file2Name'),
+    file1Stats: document.getElementById('file1Stats'),
+    file2Stats: document.getElementById('file2Stats'),
+    ignoreEscaped: document.getElementById('ignoreEscaped'),
+    ignoreHtmlEquals: document.getElementById('ignoreHtmlEquals'),
+    trimWhitespace: document.getElementById('trimWhitespace'),
+    parseFilesBtn: document.getElementById('parseFilesBtn'),
+    editFileSelect: document.getElementById('editFileSelect'),
+    searchEdit: document.getElementById('searchEdit'),
+    editTableBody: document.getElementById('editTableBody'),
+    compareTableBody: document.getElementById('compareTableBody'),
+    searchCompare: document.getElementById('searchCompare'),
+    selectAllFile1: document.getElementById('selectAllFile1'),
+    selectAllFile2: document.getElementById('selectAllFile2'),
+    selectNoneAll: document.getElementById('selectNoneAll'),
+    compareFilter: document.getElementById('compareFilter'),
+    duplicatesFileSelect: document.getElementById('duplicatesFileSelect'),
+    compareKeysRadio: document.getElementById('compareKeysRadio'),
+    compareValuesRadio: document.getElementById('compareValuesRadio'),
+    similaritySlider: document.getElementById('similaritySlider'),
+    similarityValue: document.getElementById('similarityValue'),
+    duplicatesTableBody: document.getElementById('duplicatesTableBody'),
+    exportFormat: document.getElementById('exportFormat'),
+    exportEncoding: document.getElementById('exportEncoding'),
+    exportSource: document.getElementById('exportSource'),
+    exportFilename: document.getElementById('exportFilename'),
+    exportPreview: document.getElementById('exportPreview'),
+    downloadBtn: document.getElementById('downloadBtn'),
+    editModal: document.getElementById('editModal'),
+    editKeyInput: document.getElementById('editKeyInput'),
+    editValueInput: document.getElementById('editValueInput'),
+    editWarning: document.getElementById('editWarning'),
+    editWarningText: document.getElementById('editWarningText'),
+    cancelEditBtn: document.getElementById('cancelEditBtn'),
+    saveEditBtn: document.getElementById('saveEditBtn'),
+    editOriginalIndex: document.getElementById('editOriginalIndex'),
+    editFile: document.getElementById('editFile')
+};
+
+function debounce(func, delay) {
+    clearTimeout(state.options.debounceTimeout);
+    state.options.debounceTimeout = setTimeout(func, delay);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' octets';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' Mo';
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, "'");
+}
+
+function escapeXml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"').replace(/'/g, "'");
+}
+
+function calculateWordSimilarity(str1, str2) {
+    const words1 = new Set(str1.toLowerCase().match(/\b(\w+)\b/g) || []);
+    const words2 = new Set(str2.toLowerCase().match(/\b(\w+)\b/g) || []);
+    if (words1.size === 0 && words2.size === 0) return 1.0;
+    const intersection = new Set([...words1].filter(word => words2.has(word)));
+    const union = new Set([...words1, ...words2]);
+    return union.size === 0 ? 1.0 : intersection.size / union.size;
+}
+const allTabs = [elements.importTab, elements.editTab, elements.compareTab, elements.duplicatesTab, elements.exportTab];
+const allSections = [elements.importSection, elements.editSection, elements.compareSection, elements.duplicatesSection, elements.exportSection];
+
+function switchTab(activeTab, activeSection) {
+    allTabs.forEach(tab => {
+        tab.classList.remove('active', 'text-blue-600');
+        tab.classList.add('text-gray-500');
+    });
+    allSections.forEach(section => section.classList.add('hidden'));
+    activeTab.classList.add('active', 'text-blue-600');
+    activeTab.classList.remove('text-gray-500');
+    activeSection.classList.remove('hidden');
+}
+async function handleFileSelect(event, fileState, infoElement, nameElement, statsElement) {
+    if (event.target.files.length > 0) {
+        const file = event.target.files[0];
+        fileState.name = file.name;
+        try {
+            try {
+                fileState.content = await file.text();
+            } catch (utf8Error) {
+                console.warn(`Failed to read ${file.name} as UTF-8, trying Latin-1...`, utf8Error);
+                const buffer = await file.arrayBuffer();
+                const decoder = new TextDecoder('iso-8859-1');
+                fileState.content = decoder.decode(buffer);
+            }
+            infoElement.classList.remove('hidden');
+            nameElement.textContent = file.name;
+            statsElement.textContent = `Tamaño: ${formatFileSize(file.size)}`;
+            updateParseButtonState();
+        } catch (error) {
+            console.error("Error de lectura del archivo (après tentatives):", error);
+            alert(`No se puede leer el archivo ${file.name}. Compruebe su codificación (UTF-8 ou Latin-1 supporté).`);
+            nameElement.textContent = `Error de lectura ${file.name}`;
+            statsElement.textContent = '';
+            fileState.content = '';
+        }
+        event.target.value = null;
+    }
+}
+/**
+ * Encuentra la posición del primer separador clave-valor válido (=) en una línea,
+ * respetando el escape e ignorando correctamente los signos de igual dentro de etiquetas HTML,
+ * incluso si esas etiquetas contienen caracteres como '\='.
+ * @param {string} line La línea en la que buscar.
+ * @returns {number} El índice del separador, o -1 si no se encuentra.
+ */
+function findKeyValueSeparator(line) {
+    let insideHtmlTag = false;
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (state.options.ignoreHtmlEquals) {
+            if (char === '<') {
+                insideHtmlTag = true;
+                continue;
+            }
+            if (char === '>') {
+                insideHtmlTag = false;
+                continue;
+            }
+            if (insideHtmlTag) {
+                continue;
+            }
+        }
+        if (state.options.ignoreEscaped && char === '\\' && i + 1 < line.length && line[i + 1] === '=') {
+            i++;
+            continue;
+        }
+        if (char === '=') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function parseKeyValueContent(content) {
+    const lines = content.split(/\r?\n/);
+    const parsed = [];
+    console.log(`--- Starting parseKeyValueContent: ${lines.length} lines total ---`);
+    lines.forEach((line, lineIndex) => {
+        const lineNumber = lineIndex + 1;
+        let isDebuggingThisLine = false;
+        if (isDebuggingThisLine) {
+            console.log(`[L${lineNumber} RAW]: "${line}"`);
+        }
+        const trimmedLine = line.trim();
+        if (trimmedLine === '' || trimmedLine.startsWith('#') || trimmedLine.startsWith('//')) {
+            if (isDebuggingThisLine) {
+                console.log(`[L${lineNumber} SKIP]: Empty or comment.`);
+            }
+            return;
+        }
+        const equalPos = findKeyValueSeparator(line);
+        if (isDebuggingThisLine) {
+            console.log(`[L${lineNumber} SEP]: findKeyValueSeparator result = ${equalPos}`);
+        }
+        let key, value;
+        if (equalPos !== -1) {
+            key = line.substring(0, equalPos);
+            value = line.substring(equalPos + 1);
+            if (isDebuggingThisLine) {
+                console.log(`[L${lineNumber} SPLIT]: Initial Key="${key}", Initial Value="${value}"`);
+            }
+        } else {
+            key = line;
+            value = '';
+            if (isDebuggingThisLine) {
+                console.warn(`[L${lineNumber} WARN]: No separator found! Line becomes key.`);
+            }
+        }
+        let originalKey = key;
+        let originalValue = value;
+        if (state.options.trimWhitespace) {
+            key = key.trim();
+            value = value.trim();
+            if (isDebuggingThisLine && (key !== originalKey || value !== originalValue)) {
+                console.log(`[L${lineNumber} TRIM]: Trimmed Key="${key}", Trimmed Value="${value}"`);
+            }
+        }
+        if (isDebuggingThisLine) {
+            console.log(`[L${lineNumber} PUSH]: Pushing { Key: "${key}", Value: "${value}" }`);
+        }
+        parsed.push({
+            key,
+            value
+        });
+    });
+    console.log(`--- Finished parseKeyValueContent: ${parsed.length} items parsed ---`);
+    return parsed;
+}
+
+function parseFiles() {
+    console.time("ParseFiles");
+    state.options.ignoreEscaped = elements.ignoreEscaped.checked;
+    state.options.ignoreHtmlEquals = elements.ignoreHtmlEquals.checked;
+    state.options.trimWhitespace = elements.trimWhitespace.checked;
+    state.file1.parsed = [];
+    state.file1.selected.clear();
+    state.file2.parsed = [];
+    state.file2.selected.clear();
+    state.merged.parsed = [];
+    elements.file1Stats.textContent = '';
+    elements.file2Stats.textContent = '';
+    if (state.file1.content) {
+        state.file1.parsed = parseKeyValueContent(state.file1.content);
+        state.file1.selected = new Set(Array.from({
+            length: state.file1.parsed.length
+        }, (_, i) => i));
+        elements.file1Stats.textContent = `Tamaño: ${formatFileSize(state.file1.content.length)} (${state.file1.parsed.length} líneas)`;
+    }
+    if (state.file2.content) {
+        state.file2.parsed = parseKeyValueContent(state.file2.content);
+        if (!state.file1.content) {
+            state.file2.selected = new Set(Array.from({
+                length: state.file2.parsed.length
+            }, (_, i) => i));
+        }
+        elements.file2Stats.textContent = `Tamaño: ${formatFileSize(state.file2.content.length)} (${state.file2.parsed.length} líneas)`;
+    }
+    updateMergedFile();
+    updateUIStateAfterParse();
+    detectDuplicates();
+    console.timeEnd("ParseFiles");
+}
+
+function updateParseButtonState() {
+    elements.parseFilesBtn.disabled = !(state.file1.content || state.file2.content);
+}
+
+function updateUIStateAfterParse() {
+    const hasFile1 = state.file1.parsed.length > 0;
+    const hasFile2 = state.file2.parsed.length > 0;
+    elements.editTab.disabled = !(hasFile1 || hasFile2);
+    elements.compareTab.disabled = !(hasFile1 && hasFile2);
+    elements.duplicatesTab.disabled = !(hasFile1 || hasFile2);
+    elements.exportTab.disabled = !(hasFile1 || hasFile2);
+    updateSelectOptions(elements.editFileSelect, hasFile1, hasFile2);
+    updateSelectOptions(elements.duplicatesFileSelect, hasFile1, hasFile2, true);
+    updateSelectOptions(elements.exportSource, hasFile1, hasFile2, true);
+    elements.compareKeysRadio.checked = true;
+    state.options.duplicateComparisonType = 'key';
+    elements.similaritySlider.disabled = false;
+    elements.similaritySlider.value = 100;
+    elements.similarityValue.textContent = '100%';
+    state.options.similarityThreshold = 100;
+    switchTab(elements.importTab, elements.importSection);
+}
+
+function updateSelectOptions(selectElement, hasFile1, hasFile2, includeMerged = false) {
+    const currentValue = selectElement.value;
+    selectElement.innerHTML = '';
+    if (includeMerged && (hasFile1 || hasFile2)) {
+        selectElement.add(new Option("Fichero fusionado", "merged"));
+    }
+    if (hasFile1) selectElement.add(new Option(`Archivo 1${state.file1.name ? ` (${state.file1.name})` : ''}`, "file1"));
+    if (hasFile2) selectElement.add(new Option(`Archivo 2${state.file2.name ? ` (${state.file2.name})` : ''}`, "file2"));
+    if (selectElement.querySelector(`option[value="${currentValue}"]`)) {
+        selectElement.value = currentValue;
+    } else if (selectElement.options.length > 0) {
+        selectElement.value = selectElement.options[0].value;
+    }
+}
+/**
+ * Renderiza la tabla de edición incrementalmente usando requestAnimationFrame
+ * para mejorar la capacidad de respuesta para grandes conjuntos de datos.
+ * Muestra claves y valores para el archivo seleccionado.
+ * Renderiza claves/valores usando textContent para prevenir interpretaciones HTML no deseadas.
+ */
+function renderEditTable() {
+    console.time("RenderEditTable_Total");
+    console.time("RenderEditTable_Setup");
+    const fileKey = elements.editFileSelect.value;
+    const fileData = state[fileKey];
+    const searchTerm = elements.searchEdit.value.toLowerCase().trim();
+    if (!fileData || !fileData.parsed || !fileData.parsed.length) {
+        elements.editTableBody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">No hay datos que mostrar para ${fileKey}.</td></tr>`;
+        console.timeEnd("RenderEditTable_Setup");
+        console.timeEnd("RenderEditTable_Total");
+        return;
+    }
+    const itemsToRender = fileData.parsed.map((item, index) => ({
+        ...item,
+        originalIndex: index
+    })).filter(item => !searchTerm || item.key.toLowerCase().includes(searchTerm) || item.value.toLowerCase().includes(searchTerm));
+    console.timeEnd("RenderEditTable_Setup");
+    elements.editTableBody.innerHTML = '';
+    if (itemsToRender.length === 0) {
+        elements.editTableBody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">No hay resultados para "${escapeHtml(searchTerm)}".</td></tr>`;
+        console.timeEnd("RenderEditTable_Total");
+        return;
+    }
+    const chunkSize = 75;
+    let currentIndex = 0;
+    console.time("RenderEditTable_Chunks");
+
+    function renderChunk() {
+        const fragment = document.createDocumentFragment();
+        const endIndex = Math.min(currentIndex + chunkSize, itemsToRender.length);
+        for (let i = currentIndex; i < endIndex; i++) {
+            const item = itemsToRender[i];
+            const tr = document.createElement('tr');
+            tr.className = "translation-row border-b hover:bg-blue-50";
+            tr.dataset.originalIndex = item.originalIndex;
+            const tdIndex = document.createElement('td');
+            tdIndex.className = "px-4 py-2 text-xs text-gray-500";
+            tdIndex.textContent = item.originalIndex + 1;
+            const tdKey = document.createElement('td');
+            tdKey.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-key-cell";
+            tdKey.title = item.key;
+            tdKey.textContent = item.key;
+            const tdValue = document.createElement('td');
+            tdValue.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-value-cell";
+            tdValue.title = item.value;
+            tdValue.textContent = item.value;
+            const tdActions = document.createElement('td');
+            tdActions.className = "px-4 py-2 text-center whitespace-nowrap";
+            tdActions.innerHTML = `
+                        <button class="edit-btn px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs" data-original-index="${item.originalIndex}" data-file="${fileKey}" title="Modificar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-btn px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 ml-1 text-xs" data-original-index="${item.originalIndex}" data-file="${fileKey}" title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    `;
+            tr.appendChild(tdIndex);
+            tr.appendChild(tdKey);
+            tr.appendChild(tdValue);
+            tr.appendChild(tdActions);
+            fragment.appendChild(tr);
+        }
+        elements.editTableBody.appendChild(fragment);
+        currentIndex = endIndex;
+        if (currentIndex < itemsToRender.length) {
+            requestAnimationFrame(renderChunk);
+        } else {
+            console.timeEnd("RenderEditTable_Chunks");
+            console.timeEnd("RenderEditTable_Total");
+        }
+    }
+    requestAnimationFrame(renderChunk);
+}
+
+function handleEditTableActions(event) {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const originalIndex = parseInt(button.dataset.originalIndex);
+    const fileKey = button.dataset.file;
+    if (isNaN(originalIndex) || !fileKey) return;
+    if (button.classList.contains('edit-btn')) openEditModal(originalIndex, fileKey);
+    else if (button.classList.contains('delete-btn')) deleteTranslation(originalIndex, fileKey);
+}
+
+function openEditModal(originalIndex, fileKey) {
+    const fileData = state[fileKey];
+    if (!fileData || originalIndex < 0 || originalIndex >= fileData.parsed.length) return;
+    const item = fileData.parsed[originalIndex];
+    elements.editKeyInput.value = item.key;
+    elements.editValueInput.value = item.value;
+    elements.editOriginalIndex.value = originalIndex;
+    elements.editFile.value = fileKey;
+    elements.editWarning.classList.add('hidden');
+    elements.editModal.classList.remove('hidden');
+    elements.editKeyInput.focus();
+}
+
+function closeEditModal() {
+    elements.editModal.classList.add('hidden');
+}
+
+function saveEdit() {
+    const originalIndex = parseInt(elements.editOriginalIndex.value);
+    const fileKey = elements.editFile.value;
+    const newKey = elements.editKeyInput.value;
+    const newValue = elements.editValueInput.value;
+    if (isNaN(originalIndex) || !fileKey) return;
+    const fileData = state[fileKey];
+    const oldKey = fileData.parsed[originalIndex].key;
+    if (newKey !== oldKey && fileData.parsed.some((item, idx) => item.key === newKey && idx !== originalIndex)) {
+        elements.editWarningText.textContent = `La clave "${escapeHtml(newKey)}" ya existe en este archivo.`;
+        elements.editWarning.classList.remove('hidden');
+        return;
+    }
+    fileData.parsed[originalIndex] = {
+        key: newKey,
+        value: newValue
+    };
+    if (fileData.selected.has(originalIndex)) {
+        updateMergedFile();
+        updateExportPreview();
+    }
+    closeEditModal();
+    renderEditTable();
+}
+
+function deleteTranslation(originalIndex, fileKey) {
+    const fileData = state[fileKey];
+    if (!fileData || originalIndex < 0 || originalIndex >= fileData.parsed.length) return;
+    const itemToDelete = fileData.parsed[originalIndex];
+    if (confirm(`Supprimer définitivement la ligne ${originalIndex + 1} ?\nClé: ${itemToDelete.key}\nValeur: ${itemToDelete.value}`)) {
+        const wasSelected = fileData.selected.has(originalIndex);
+        fileData.parsed.splice(originalIndex, 1);
+        const newSelected = new Set();
+        fileData.selected.forEach(idx => {
+            if (idx < originalIndex) newSelected.add(idx);
+            else if (idx > originalIndex) newSelected.add(idx - 1);
+        });
+        fileData.selected = newSelected;
+        if (wasSelected) updateMergedFile();
+        renderEditTable();
+        if (!elements.compareSection.classList.contains('hidden')) renderCompareTable();
+        if (!elements.duplicatesSection.classList.contains('hidden')) detectDuplicates();
+        updateExportPreview();
+    }
+}
+/**
+ * Renderiza la tabla de comparación incrementalmente usando requestAnimationFrame
+ * para mejorar la capacidad de respuesta para grandes conjuntos de datos.
+ * Muestra las claves y los valores de ambos archivos uno al lado del otro.
+ * Permite seleccionar el valor preferido para el archivo fusionado.
+ * Renderiza las claves/valores utilizando textContent para evitar interpretaciones HTML no deseadas.
+ */
+function renderCompareTable() {
+    console.time("RenderCompareTable_Total");
+    console.time("RenderCompareTable_Setup");
+    if (!state.file1.parsed.length || !state.file2.parsed.length) {
+        elements.compareTableBody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">Importa dos archivos para compararlos.</td></tr>`;
+        console.timeEnd("RenderCompareTable_Setup");
+        console.timeEnd("RenderCompareTable_Total");
+        return;
+    }
+    const searchTerm = elements.searchCompare.value.toLowerCase().trim();
+    const file1Map = new Map(state.file1.parsed.map((item, index) => [item.key, {
+        ...item,
+        originalIndex: index
+    }]));
+    const file2Map = new Map(state.file2.parsed.map((item, index) => [item.key, {
+        ...item,
+        originalIndex: index
+    }]));
+    const allKeys = new Set([...file1Map.keys(), ...file2Map.keys()]);
+    const sortedKeys = Array.from(allKeys).sort();
+    const filterType = elements.compareFilter.value;
+    const filteredKeys = sortedKeys.filter(key => {
+        const file1Entry = file1Map.get(key);
+        const file2Entry = file2Map.get(key);
+        const searchMatch = !searchTerm || key.toLowerCase().includes(searchTerm);
+        if (!searchMatch) return false;
+        switch (filterType) {
+            /* ... filter logic ... */
+            case 'diff':
+                return file1Entry && file2Entry && file1Entry.value !== file2Entry.value;
+            case 'same':
+                return file1Entry && file2Entry && file1Entry.value === file2Entry.value;
+            case 'missing1':
+                return !file1Entry && file2Entry;
+            case 'missing2':
+                return file1Entry && !file2Entry;
+            case 'all':
+            default:
+                return true;
+        }
+    });
+    console.timeEnd("RenderCompareTable_Setup");
+    elements.compareTableBody.innerHTML = '';
+    if (filteredKeys.length === 0) {
+        const messageKey = searchTerm ? `"${escapeHtml(searchTerm)}"` : '';
+        const messageFilter = filterType !== 'all' ? ` pour le filtre sélectionné` : '';
+        elements.compareTableBody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">No se ha encontrado ninguna clave ${messageKey}${messageFilter}.</td></tr>`;
+        console.timeEnd("RenderCompareTable_Total");
+        return;
+    }
+    const chunkSize = 800;
+    let currentIndex = 0;
+    console.time("RenderCompareTable_Chunks");
+
+    function renderChunk() {
+        const fragment = document.createDocumentFragment();
+        const endIndex = Math.min(currentIndex + chunkSize, filteredKeys.length);
+        for (let i = currentIndex; i < endIndex; i++) {
+            const key = filteredKeys[i];
+            const file1Entry = file1Map.get(key);
+            const file2Entry = file2Map.get(key);
+            const isFile1Selected = file1Entry && state.file1.selected.has(file1Entry.originalIndex);
+            const isFile2Selected = file2Entry && state.file2.selected.has(file2Entry.originalIndex);
+            const isNoneSelected = !isFile1Selected && !isFile2Selected;
+            let rowClass = 'border-b hover:bg-gray-50';
+            if (isFile1Selected) rowClass += ' selection-highlight';
+            else if (isFile2Selected) rowClass += ' selection-highlight';
+            else if (isNoneSelected) rowClass += ' no-selection-highlight';
+            const tr = document.createElement('tr');
+            tr.className = rowClass;
+            tr.dataset.key = key;
+            const tdKey = document.createElement('td');
+            tdKey.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-key-cell";
+            tdKey.textContent = key;
+            tdKey.title = key;
+            const tdFile1 = document.createElement('td');
+            tdFile1.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-value-cell";
+            tdFile1.dataset.file = "file1";
+            tdFile1.dataset.originalIndex = file1Entry ? file1Entry.originalIndex : -1;
+            if (file1Entry) {
+                tdFile1.textContent = file1Entry.value;
+                tdFile1.title = file1Entry.value;
+            } else {
+                tdFile1.innerHTML = '<span class="text-gray-400">N/A</span>';
+            }
+            const tdFile2 = document.createElement('td');
+            tdFile2.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-value-cell";
+            tdFile2.dataset.file = "file2";
+            tdFile2.dataset.originalIndex = file2Entry ? file2Entry.originalIndex : -1;
+            if (file2Entry) {
+                tdFile2.textContent = file2Entry.value;
+                tdFile2.title = file2Entry.value;
+            } else {
+                tdFile2.innerHTML = '<span class="text-gray-400">N/A</span>';
+            }
+            const tdActions = document.createElement('td');
+            tdActions.className = "px-4 py-2 text-center space-x-1 whitespace-nowrap";
+            tdActions.innerHTML = `
+                        ${file1Entry ? `<button class="select-btn px-2 py-1 ${isFile1Selected ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'} rounded hover:bg-blue-200 text-xs" data-file="file1" data-original-index="${file1Entry.originalIndex}" title="Seleccionar archivo 1"><i class="fas fa-check"></i> F1</button>` : `<span class="inline-block w-10"></span>`}
+                        ${file2Entry ? `<button class="select-btn px-2 py-1 ${isFile2Selected ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700'} rounded hover:bg-green-200 text-xs" data-file="file2" data-original-index="${file2Entry.originalIndex}" title="Seleccionar archivo  2"><i class="fas fa-check"></i> F2</button>` : `<span class="inline-block w-10"></span>`}
+                         <button class="select-btn px-2 py-1 ${isNoneSelected ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-700'} rounded hover:bg-gray-200 text-xs" data-file="none" title="No seleccionar ninguno"><i class="fas fa-ban"></i></button>
+                    `;
+            tr.appendChild(tdKey);
+            tr.appendChild(tdFile1);
+            tr.appendChild(tdFile2);
+            tr.appendChild(tdActions);
+            fragment.appendChild(tr);
+        }
+        elements.compareTableBody.appendChild(fragment);
+        currentIndex = endIndex;
+        if (currentIndex < filteredKeys.length) {
+            requestAnimationFrame(renderChunk);
+        } else {
+            console.timeEnd("RenderCompareTable_Chunks");
+            console.timeEnd("RenderCompareTable_Total");
+        }
+    }
+    requestAnimationFrame(renderChunk);
+}
+/**
+ * Escapes a string for safe use within an HTML attribute value delimited by double quotes (").
+ * Performs standard HTML escaping first, then specifically escapes any resulting double quotes.
+ * @param {string} str The string to escape.
+ * @returns {string} The escaped string suitable for attribute values.
+ */
+function escapeHtmlAttribute(str) {
+    if (!str) return '';
+    let escaped = escapeHtml(str);
+    escaped = escaped.replace(/"/g, '&quot;');
+    return escaped;
+}
+
+function handleCompareTableActions(event) {
+    const button = event.target.closest('button.select-btn');
+    if (!button) return;
+    const fileKey = button.dataset.file;
+    const originalIndex = parseInt(button.dataset.originalIndex);
+    const parentRow = button.closest('tr');
+    if (!parentRow) return;
+    const key = parentRow.dataset.key;
+    const file1Item = state.file1.parsed.find(item => item.key === key);
+    const file2Item = state.file2.parsed.find(item => item.key === key);
+    const file1OriginalIndex = file1Item ? state.file1.parsed.indexOf(file1Item) : -1;
+    const file2OriginalIndex = file2Item ? state.file2.parsed.indexOf(file2Item) : -1;
+    selectTranslation(fileKey, originalIndex, key, file1OriginalIndex, file2OriginalIndex);
+}
+/**
+ * Updates selection state and tries to update only the affected row in the compare table DOM.
+ */
+function selectTranslation(fileToSelect, originalIndexFromButton, key, file1OriginalIndex, file2OriginalIndex) {
+    console.time("SelectTranslation");
+    const file1Index = file1OriginalIndex;
+    const file2Index = file2OriginalIndex;
+    let changed = false;
+    const wasFile1Selected = state.file1.selected.has(file1Index);
+    const wasFile2Selected = state.file2.selected.has(file2Index);
+    if (fileToSelect === 'file1') {
+        if (file1Index !== -1 && !wasFile1Selected) {
+            state.file1.selected.add(file1Index);
+            changed = true;
+        }
+        if (file2Index !== -1 && wasFile2Selected) {
+            state.file2.selected.delete(file2Index);
+            changed = true;
+        }
+    } else if (fileToSelect === 'file2') {
+        if (file1Index !== -1 && wasFile1Selected) {
+            state.file1.selected.delete(file1Index);
+            changed = true;
+        }
+        if (file2Index !== -1 && !wasFile2Selected) {
+            state.file2.selected.add(file2Index);
+            changed = true;
+        }
+    } else {
+        if (file1Index !== -1 && wasFile1Selected) {
+            state.file1.selected.delete(file1Index);
+            changed = true;
+        }
+        if (file2Index !== -1 && wasFile2Selected) {
+            state.file2.selected.delete(file2Index);
+            changed = true;
+        }
+    }
+    if (!changed) {
+        console.timeEnd("SelectTranslation");
+        return;
+    }
+    updateMergedFile();
+    console.time("UpdateDOMRow");
+    const rowElement = elements.compareTableBody.querySelector(`tr[data-key="${key}"]`);
+    if (rowElement) {
+        const isFile1SelectedNow = state.file1.selected.has(file1Index);
+        const isFile2SelectedNow = state.file2.selected.has(file2Index);
+        const isNoneSelectedNow = !isFile1SelectedNow && !isFile2SelectedNow;
+        rowElement.classList.remove('selection-highlight', 'no-selection-highlight');
+        if (isFile1SelectedNow || isFile2SelectedNow) {
+            rowElement.classList.add('selection-highlight');
+        } else if (isNoneSelectedNow) {
+            rowElement.classList.add('no-selection-highlight');
+        }
+        const buttonF1 = rowElement.querySelector('button[data-file="file1"]');
+        const buttonF2 = rowElement.querySelector('button[data-file="file2"]');
+        const buttonNone = rowElement.querySelector('button[data-file="none"]');
+        if (buttonF1) {
+            buttonF1.classList.toggle('bg-blue-600', isFile1SelectedNow);
+            buttonF1.classList.toggle('text-white', isFile1SelectedNow);
+            buttonF1.classList.toggle('bg-blue-100', !isFile1SelectedNow);
+            buttonF1.classList.toggle('text-blue-700', !isFile1SelectedNow);
+        }
+        if (buttonF2) {
+            buttonF2.classList.toggle('bg-green-600', isFile2SelectedNow);
+            buttonF2.classList.toggle('text-white', isFile2SelectedNow);
+            buttonF2.classList.toggle('bg-green-100', !isFile2SelectedNow);
+            buttonF2.classList.toggle('text-green-700', !isFile2SelectedNow);
+        }
+        if (buttonNone) {
+            buttonNone.classList.toggle('bg-gray-600', isNoneSelectedNow);
+            buttonNone.classList.toggle('text-white', isNoneSelectedNow);
+            buttonNone.classList.toggle('bg-gray-100', !isNoneSelectedNow);
+            buttonNone.classList.toggle('text-gray-700', !isNoneSelectedNow);
+        }
+    } else {
+        console.warn("Row not found for direct DOM update, re-rendering table.");
+        renderCompareTable();
+    }
+    console.timeEnd("UpdateDOMRow");
+    console.timeEnd("SelectTranslation");
+}
+
+function selectAll(fileKey) {
+    if (fileKey === 'file1') {
+        state.file1.selected = new Set(Array.from({
+            length: state.file1.parsed.length
+        }, (_, i) => i));
+        const file1Keys = new Set(state.file1.parsed.map(item => item.key));
+        const newFile2Selected = new Set();
+        state.file2.selected.forEach(index => {
+            if (index >= 0 && index < state.file2.parsed.length && !file1Keys.has(state.file2.parsed[index].key)) {
+                newFile2Selected.add(index);
+            }
+        });
+        state.file2.selected = newFile2Selected;
+    } else if (fileKey === 'file2') {
+        state.file2.selected = new Set(Array.from({
+            length: state.file2.parsed.length
+        }, (_, i) => i));
+        const file2Keys = new Set(state.file2.parsed.map(item => item.key));
+        const newFile1Selected = new Set();
+        state.file1.selected.forEach(index => {
+            if (index >= 0 && index < state.file1.parsed.length && !file2Keys.has(state.file1.parsed[index].key)) {
+                newFile1Selected.add(index);
+            }
+        });
+        state.file1.selected = newFile1Selected;
+    } else {
+        state.file1.selected = new Set();
+        state.file2.selected = new Set();
+    }
+    updateMergedFile();
+    renderCompareTable();
+    updateExportPreview();
+}
+
+function updateMergedFile() {
+    console.time("UpdateMergedFile");
+    const mergedMap = new Map();
+    state.file1.selected.forEach(index => {
+        if (index >= 0 && index < state.file1.parsed.length) {
+            const item = state.file1.parsed[index];
+            mergedMap.set(item.key, item.value);
+        }
+    });
+    state.file2.selected.forEach(index => {
+        if (index >= 0 && index < state.file2.parsed.length) {
+            const item = state.file2.parsed[index];
+            mergedMap.set(item.key, item.value);
+        }
+    });
+    state.merged.parsed = Array.from(mergedMap.entries()).map(([key, value]) => ({
+        key,
+        value
+    }));
+    console.timeEnd("UpdateMergedFile");
+    if (!elements.duplicatesSection.classList.contains('hidden') && elements.duplicatesFileSelect.value === 'merged') {
+        detectDuplicates();
+    }
+}
+
+function updateDuplicateComparisonType() {
+    const isKeyComparison = elements.compareKeysRadio.checked;
+    state.options.duplicateComparisonType = isKeyComparison ? 'key' : 'value';
+    if (isKeyComparison) {
+        elements.similaritySlider.disabled = false;
+        elements.similaritySlider.value = 100;
+        elements.similarityValue.textContent = '100%';
+        state.options.similarityThreshold = 100;
+    } else {
+        elements.similaritySlider.disabled = false;
+        state.options.similarityThreshold = parseInt(elements.similaritySlider.value);
+        elements.similarityValue.textContent = `${state.options.similarityThreshold}%`;
+    }
+    detectDuplicates();
+}
+/**
+ * Generates HTML for the second string, highlighting parts added
+ * compared to the first string, based on word differences.
+ * Uses the 'diff' library (Diff.diffWordsWithSpace).
+ * @param {string} text1 The original string.
+ * @param {string} text2 The string to compare and highlight.
+ * @returns {string} HTML string with differences highlighted.
+ */
+function generateDiffHtml(text1, text2) {
+    if (typeof Diff === 'undefined' || !Diff?.diffWordsWithSpace) {
+        console.warn("Diff library not loaded. Cannot generate diff HTML.");
+        return escapeHtml(text2);
+    }
+    if (text1 === text2) {
+        return escapeHtml(text2);
+    }
+    const differences = Diff.diffWordsWithSpace(text1, text2, {
+        ignoreCase: true
+    });
+    let html = '';
+    differences.forEach(part => {
+        const escapedValue = escapeHtml(part.value);
+        if (part.added) {
+            html += `<span class="diff-added">${escapedValue}</span>`;
+        } else if (!part.removed) {
+            html += `<span class="diff-unchanged">${escapedValue}</span>`;
+        }
+    });
+    return html;
+}
+/**
+ * Calculates Levenshtein distance between two strings.
+ * (Standard iterative implementation with two rows optimization)
+ * @param {string} s1 First string
+ * @param {string} s2 Second string
+ * @returns {number} Levenshtein distance
+ */
+function levenshteinDistance(s1, s2) {
+    if (s1.length < s2.length) {
+        [s1, s2] = [s2, s1];
+    }
+    const previousRow = Array.from({
+        length: s2.length + 1
+    }, (_, i) => i);
+    const currentRow = Array(s2.length + 1);
+    for (let i = 0; i < s1.length; i++) {
+        currentRow[0] = i + 1;
+        for (let j = 0; j < s2.length; j++) {
+            const cost = (s1[i] === s2[j]) ? 0 : 1;
+            currentRow[j + 1] = Math.min(currentRow[j] + 1, previousRow[j + 1] + 1, previousRow[j] + cost);
+        }
+        for (let j = 0; j <= s2.length; j++) {
+            previousRow[j] = currentRow[j];
+        }
+    }
+    return previousRow[s2.length];
+}
+/**
+ * Calculates similarity percentage based on Levenshtein distance.
+ * Avoids rounding up near-perfect matches to exactly 100%.
+ * @param {string} s1 First string
+ * @param {string} s2 Second string
+ * @returns {number} Similarity percentage (0-100), only 100 if distance is 0.
+ */
+function calculateLevenshteinSimilarity(s1, s2) {
+    const maxLength = Math.max(s1.length, s2.length);
+    if (maxLength === 0) return 100;
+    const distance = levenshteinDistance(s1, s2);
+    if (distance === 0) {
+        return 100;
+    }
+    const similarityRatio = 1 - (distance / maxLength);
+    const similarityPercent = Math.floor(similarityRatio * 100);
+    return Math.max(0, similarityPercent);
+}
+/**
+ * Detects duplicates based on selected criteria and threshold, then renders the results
+ * incrementally using requestAnimationFrame to improve responsiveness.
+ * Includes performance optimizations and excludes case-only key differences.
+ * Renders keys/values using textContent, and highlights diffs in duplicates.
+ */
+function detectDuplicates() {
+    console.time("DetectDuplicates_Total");
+    console.time("DetectDuplicates_Detection");
+    const fileKey = elements.duplicatesFileSelect.value;
+    const originalFileData = state[fileKey]?.parsed;
+    const compareType = state.options.duplicateComparisonType;
+    const currentThreshold = state.options.similarityThreshold;
+    if (!originalFileData || originalFileData.length === 0) {
+        elements.duplicatesTableBody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">No hay datos para analizar.</td></tr>`;
+        console.timeEnd("DetectDuplicates_Detection");
+        console.timeEnd("DetectDuplicates_Total");
+        return;
+    }
+    const augmentedFileData = originalFileData.map(item => ({
+        ...item,
+        lowerKey: item.key.toLowerCase(),
+        lowerValue: item.value.toLowerCase()
+    }));
+    const duplicates = [];
+    const thresholdRatio = currentThreshold / 100;
+    for (let i = 0; i < augmentedFileData.length; i++) {
+        const item1 = augmentedFileData[i];
+        for (let j = i + 1; j < augmentedFileData.length; j++) {
+            const item2 = augmentedFileData[j];
+            let similarityPercent = 0;
+            let matchType = '';
+            if (compareType === 'key') {
+                if (item1.lowerKey === item2.lowerKey) {
+                    if (item1.key === item2.key) {
+                        similarityPercent = 100;
+                        matchType = 'key-exact';
+                    } else {
+                        continue;
+                    }
+                } else if (currentThreshold < 100) {
+                    const len1 = item1.lowerKey.length;
+                    const len2 = item2.lowerKey.length;
+                    const maxLength = Math.max(len1, len2);
+                    if (maxLength > 0) {
+                        const lengthDifference = Math.abs(len1 - len2);
+                        if (lengthDifference / maxLength > (1 - thresholdRatio)) {
+                            continue;
+                        }
+                    }
+                    similarityPercent = calculateLevenshteinSimilarity(item1.lowerKey, item2.lowerKey);
+                    if (similarityPercent >= currentThreshold) {
+                        matchType = 'key-close';
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            } else {
+                if (item1.value === item2.value) {
+                    similarityPercent = 100;
+                    matchType = 'value-exact';
+                } else if (currentThreshold < 100) {
+                    const wordSimilarity = calculateWordSimilarity(item1.value, item2.value);
+                    similarityPercent = Math.round(wordSimilarity * 100);
+                    if (similarityPercent >= currentThreshold) {
+                        matchType = 'value-close';
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+            if (matchType) {
+                duplicates.push({
+                    index: i,
+                    item: originalFileData[i],
+                    duplicateIndex: j,
+                    duplicateItem: originalFileData[j],
+                    similarity: similarityPercent,
+                    type: matchType
+                });
+            }
+        }
+    }
+    console.timeEnd("DetectDuplicates_Detection");
+    if (duplicates.length === 0) {
+        const message = `No hay duplicación de ${compareType === 'key' ? 'clave' : 'valor'} con un umbral de ${currentThreshold}%.`;
+        elements.duplicatesTableBody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">${message}</td></tr>`;
+        console.timeEnd("DetectDuplicates_Total");
+        return;
+    }
+    console.time("DetectDuplicates_Sort");
+    duplicates.sort((a, b) => {
+        const scoreA = a.similarity === 100 ? 200 : a.similarity;
+        const scoreB = b.similarity === 100 ? 200 : b.similarity;
+        return scoreB - scoreA || a.index - b.index;
+    });
+    console.timeEnd("DetectDuplicates_Sort");
+    elements.duplicatesTableBody.innerHTML = '';
+    console.time("");
+    const chunkSize = 1000;
+    let currentIndex = 0;
+
+    function renderChunk() {
+        const fragment = document.createDocumentFragment();
+        const endIndex = Math.min(currentIndex + chunkSize, duplicates.length);
+        for (let i = currentIndex; i < endIndex; i++) {
+            const dup = duplicates[i];
+            let rowClass = 'border-b';
+            let similarityText = `${dup.similarity}%`;
+            let titleText = `Similarité: ${dup.similarity}%`;
+            let textColorClass = dup.similarity === 100 ? 'text-red-700' : 'text-yellow-700';
+            switch (dup.type) {
+                case 'key-exact':
+                    rowClass += ' duplicate-key-exact';
+                    similarityText = 'Clave exacta';
+                    titleText = 'Claves idénticas';
+                    break;
+                case 'value-exact':
+                    rowClass += ' duplicate-value-exact';
+                    similarityText = 'Valor exacto';
+                    titleText = 'Valores idénticos (100%)';
+                    break;
+                case 'key-close':
+                    rowClass += ' duplicate-value-close';
+                    similarityText = `${dup.similarity}% (Clé)`;
+                    titleText = `Similitud Clave (Levenshtein): ${dup.similarity}%`;
+                    break;
+                case 'value-close':
+                    rowClass += ' duplicate-value-close';
+                    similarityText = `${dup.similarity}% (Val)`;
+                    titleText = `Valor de similitud (Mots): ${dup.similarity}%`;
+                    break;
+            }
+            const tr = document.createElement('tr');
+            tr.className = rowClass;
+            const tdIndex = document.createElement('td');
+            tdIndex.className = "px-4 py-2 text-xs text-gray-500";
+            tdIndex.textContent = dup.index + 1;
+            const tdKey = document.createElement('td');
+            tdKey.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-key-cell";
+            tdKey.title = dup.item.key;
+            tdKey.textContent = dup.item.key;
+            const tdValue = document.createElement('td');
+            tdValue.className = "px-4 py-2 font-mono text-sm table-wrap-cell table-value-cell";
+            tdValue.title = dup.item.value;
+            tdValue.textContent = dup.item.value;
+            const tdSimilarity = document.createElement('td');
+            tdSimilarity.className = `px-4 py-2 text-center font-semibold text-xs ${textColorClass}`;
+            tdSimilarity.title = titleText;
+            tdSimilarity.textContent = similarityText;
+            const tdDuplicateInfo = document.createElement('td');
+            tdDuplicateInfo.className = "px-4 py-2 text-xs table-wrap-cell";
+            const divLine = document.createElement('div');
+            divLine.className = "mb-1";
+            divLine.innerHTML = `L${dup.duplicateIndex + 1}: `;
+            const spanKey = document.createElement('span');
+            spanKey.className = "font-mono bg-gray-100 px-1 rounded";
+            spanKey.title = dup.duplicateItem.key;
+            spanKey.innerHTML = generateDiffHtml(dup.item.key, dup.duplicateItem.key);
+            const divValue = document.createElement('div');
+            divValue.className = "font-mono text-gray-700";
+            divValue.title = dup.duplicateItem.value;
+            divValue.innerHTML = generateDiffHtml(dup.item.value, dup.duplicateItem.value);
+            divLine.appendChild(spanKey);
+            tdDuplicateInfo.appendChild(divLine);
+            tdDuplicateInfo.appendChild(divValue);
+            tr.appendChild(tdIndex);
+            tr.appendChild(tdKey);
+            tr.appendChild(tdValue);
+            tr.appendChild(tdSimilarity);
+            tr.appendChild(tdDuplicateInfo);
+            fragment.appendChild(tr);
+        }
+        elements.duplicatesTableBody.appendChild(fragment);
+        currentIndex = endIndex;
+        if (currentIndex < duplicates.length) {
+            requestAnimationFrame(renderChunk);
+        } else {
+            console.timeEnd("");
+            console.timeEnd("DetectDuplicates_Total");
+        }
+    }
+    requestAnimationFrame(renderChunk);
+}
+
+function getExportData() {
+    const source = elements.exportSource.value;
+    return state[source]?.parsed || [];
+}
+
+function updateExportPreview() {
+    console.time("UpdateExportPreview");
+    const fileData = getExportData();
+    const format = elements.exportFormat.value;
+    elements.exportPreview.textContent = '';
+    if (!fileData.length) {
+        elements.exportPreview.textContent = 'No hay datos para exportar.';
+        elements.downloadBtn.disabled = true;
+        return;
+    }
+    let output = '';
+    try {
+        if (format === 'keyvalue') output = fileData.map(item => `${item.key}=${item.value}`).join('\n');
+        else if (format === 'json') output = JSON.stringify(fileData.reduce((acc, item) => {
+            acc[item.key] = item.value;
+            return acc;
+        }, {}), null, 2);
+        else if (format === 'xml') {
+            output = '<?xml version="1.0" encoding="UTF-8"?>\n<translations>\n';
+            output += fileData.map(item => `  <translation>\n    <key>${escapeXml(item.key)}</key>\n    <value>${escapeXml(item.value)}</value>\n  </translation>`).join('\n');
+            output += '\n</translations>';
+        }
+        elements.exportPreview.textContent = output;
+        elements.downloadBtn.disabled = false;
+    } catch (error) {
+        elements.exportPreview.textContent = `Erreur lors de la génération de l'aperçu au format ${format}.`;
+        elements.downloadBtn.disabled = true;
+    }
+    console.timeEnd("UpdateExportPreview");
+}
+
+function downloadExportFile() {
+    const output = elements.exportPreview.textContent;
+    const format = elements.exportFormat.value;
+    const encoding = elements.exportEncoding.value;
+    let filename = elements.exportFilename.value.trim();
+    let mimeType = 'text/plain;charset=utf-8';
+    let fileExtension = '.txt';
+    if (!filename) filename = `export_${format}`;
+    if (format === 'json') {
+        mimeType = 'application/json;charset=utf-8';
+        fileExtension = '.json';
+    } else if (format === 'xml') {
+        mimeType = 'application/xml;charset=utf-8';
+        fileExtension = '.xml';
+    }
+    if (!filename.toLowerCase().endsWith(fileExtension)) filename += fileExtension;
+    elements.exportFilename.value = filename;
+    const blob = new Blob([output], {
+        type: mimeType
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+}
+
+function setupEventListeners() {
+    elements.importTab.addEventListener('click', () => switchTab(elements.importTab, elements.importSection));
+    elements.editTab.addEventListener('click', () => {
+        switchTab(elements.editTab, elements.editSection);
+        renderEditTable();
+    });
+    elements.compareTab.addEventListener('click', () => {
+        switchTab(elements.compareTab, elements.compareSection);
+        renderCompareTable();
+    });
+    elements.duplicatesTab.addEventListener('click', () => {
+        switchTab(elements.duplicatesTab, elements.duplicatesSection);
+        detectDuplicates();
+    });
+    elements.exportTab.addEventListener('click', () => {
+        switchTab(elements.exportTab, elements.exportSection);
+        updateExportPreview();
+    });
+    elements.file1Input.addEventListener('change', (e) => handleFileSelect(e, state.file1, elements.file1Info, elements.file1Name, elements.file1Stats));
+    elements.file2Input.addEventListener('change', (e) => handleFileSelect(e, state.file2, elements.file2Info, elements.file2Name, elements.file2Stats));
+    elements.parseFilesBtn.addEventListener('click', parseFiles);
+    elements.editFileSelect.addEventListener('change', renderEditTable);
+    elements.searchEdit.addEventListener('input', () => debounce(renderEditTable, 300));
+    elements.editTableBody.addEventListener('click', handleEditTableActions);
+    elements.searchCompare.addEventListener('input', () => debounce(renderCompareTable, 300));
+    elements.selectAllFile1.addEventListener('click', () => selectAll('file1'));
+    elements.selectAllFile2.addEventListener('click', () => selectAll('file2'));
+    elements.selectNoneAll.addEventListener('click', () => selectAll('none'));
+    elements.compareTableBody.addEventListener('click', handleCompareTableActions);
+    elements.duplicatesFileSelect.addEventListener('change', detectDuplicates);
+    elements.compareKeysRadio.addEventListener('change', updateDuplicateComparisonType);
+    elements.compareValuesRadio.addEventListener('change', updateDuplicateComparisonType);
+    elements.similaritySlider.addEventListener('input', (e) => {
+        if (!elements.similaritySlider.disabled) {
+            elements.similarityValue.textContent = `${e.target.value}%`;
+        }
+    });
+    elements.similaritySlider.addEventListener('change', (e) => {
+        if (!elements.similaritySlider.disabled) {
+            state.options.similarityThreshold = parseInt(e.target.value);
+            elements.similarityValue.textContent = `${state.options.similarityThreshold}%`;
+            detectDuplicates();
+        }
+    });
+    elements.exportFormat.addEventListener('change', () => {
+        updateExportPreview();
+        updateExportFilenameExtension();
+    });
+    elements.exportSource.addEventListener('change', updateExportPreview);
+    elements.exportFilename.addEventListener('change', updateExportFilenameExtension);
+    elements.downloadBtn.addEventListener('click', downloadExportFile);
+    elements.saveEditBtn.addEventListener('click', saveEdit);
+    elements.cancelEditBtn.addEventListener('click', closeEditModal);
+    updateParseButtonState();
+    elements.similaritySlider.disabled = true;
+}
+
+function updateExportFilenameExtension() {
+    const format = elements.exportFormat.value;
+    let filename = elements.exportFilename.value;
+    const currentExtMatch = filename.match(/\.(txt|json|xml)$/i);
+    const currentExt = currentExtMatch ? currentExtMatch[0] : '';
+    let newExt = '.txt';
+    if (format === 'json') newExt = '.json';
+    else if (format === 'xml') newExt = '.xml';
+    if (currentExt && currentExt.toLowerCase() !== newExt) filename = filename.substring(0, filename.length - currentExt.length);
+    if (!filename.toLowerCase().endsWith(newExt)) filename += newExt;
+    elements.exportFilename.value = filename;
+}
+document.addEventListener('DOMContentLoaded', setupEventListeners);
+    </script>
+</body>
+</html>
